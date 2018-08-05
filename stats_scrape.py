@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
 from requests import get
+import csv
 
 
 def add_basic_stats(stats, tds):
@@ -38,9 +39,10 @@ def add_advanced_stats(advanced, resp):
             current_marker = body_text.index(tag)
             body_text = body_text[current_marker + len(tag):]
         body_text = versions[max(len(versions) - 2, 0)]
-        current_marker = body_text.index(tag)
-        body_text = body_text[current_marker:]
-        advanced[advance].append(body_text[len(tag):body_text.index("</td")])
+        if tag in body_text:
+            current_marker = body_text.index(tag)
+            body_text = body_text[current_marker:]
+            advanced[advance].append(body_text[len(tag):body_text.index("</td")])
 
 
 
@@ -78,11 +80,13 @@ def college_stat_scrape(name):
     return stats
 
 def advanced_stats_scrape(players):
-    def add_rpm(rows, players):
+    def add_rpm(rows, players, year):
+        indices = {"/year/2014": 2014, "/year/2015": 2015, "/year/2016": 2016, "/year/2017": 2017, "": 2018}
         for row in rows:
-            player_name = (row.a.text)
+            player_name = row.a.text
             if player_name in players:
-                players[player_name]["rpm"] = row.find('td', class_="sortcell").text
+                stats = players[player_name]
+                stats["rpm"][indices[year] - stats["draft_year"]] = row.find('td', class_="sortcell").text
     years = {"/year/2014": 11, "/year/2015": 12, "/year/2016": 11, "/year/2017": 12, "": 14}
     for year in years:
         for page in range(1, years[year] + 1):
@@ -91,14 +95,14 @@ def advanced_stats_scrape(players):
             html = BeautifulSoup(response, 'html.parser')
             oddrows = html.find_all('tr', class_= 'oddrow')
             evenrows = html.find_all('tr', class_= 'evenrow')
-            add_rpm(oddrows, players)
-            add_rpm(evenrows, players)
+            add_rpm(oddrows, players, year)
+            add_rpm(evenrows, players, year)
 
 
 def scrape_stats(starting_year, ending_year):
     url_template = "https://www.basketball-reference.com/draft/NBA_"
     players = {}
-    for value in range(starting_year, ending_year):
+    for value in range(starting_year, ending_year + 1):
         print(str(value) + " NBA DRAFT")
         url = url_template + str(value) + ".html"
         response = get(url).text
@@ -114,8 +118,13 @@ def scrape_stats(starting_year, ending_year):
             if "player" in characteristic:
                 name = characteristic[starting_index + 3:ending_index - 2].split(",")
                 players[name[1] + " " + name[0]] = college_stat_scrape(name)
+                players[name[1] + " " + name[0]]["rpm"] = ["N/A" for _ in range(2018 - value)]
+                players[name[1] + " " + name[0]]["draft_year"] = value
     advanced_stats_scrape(players)
-    for player in players:
-        print(player + " " + players[player])
+    with open('stats.csv', mode='w') as stats_file:
+        stats_writer = csv.writer(stats_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        for player in players:
+            stats_writer.writerow([player] + list(players[player].values()))
 
-scrape_stats(2011, 2012)
+scrape_stats(2003, 2013)
+
