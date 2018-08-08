@@ -4,6 +4,12 @@ import csv
 
 
 def add_basic_stats(stats, tds):
+    """
+    :param stats: dictionary of college stats
+    :param tds: items with td tag on college page
+    :return: None
+    Retrieves basic college stats from sports reference page
+    """
     for td in tds:
         td = str(td)
         starting_index = td.find(">") + 1
@@ -47,11 +53,6 @@ def add_advanced_stats(advanced, resp):
 
 
 def college_stat_scrape(name):
-    """,
-                     "rapm": [],
-                     "bpm": [],
-                     "winshare": [],
-                     "vorp": []"""
     college_url_template = "https://www.sports-reference.com/cbb/players/"
     url = college_url_template + name[1].lower() + "-" + name[0].lower() + "-1.html"
     response = get(url).text
@@ -131,13 +132,14 @@ def all_stats_scrape(players):
         for row in rows:
             if int(years[count].text) > 1996:
                 link = str(row.a)
-                if row.a.text in players:
-                    urls[link[link.index("players"):link.index("html") + 4]] = row.a.text
+                urls[link[link.index("players"):link.index("html") + 4]] = row.a.text
             count += 7
-    # page_scrape(urls, players)
+    page_scrape(urls, players)
 
 
 def page_scrape(urls, players):
+    advanced_stats = [{}, {}, {}, {}]
+    file_names = ["bpm", "ws", "ws48", "vorp"]
     for url in urls:
         stats = {"pts_per_g": [],
                  "trb_per_g": [],
@@ -168,32 +170,60 @@ def page_scrape(urls, players):
             stats["stl_per_g"].append(tr[tr.index("stl_per_g") + 11:tr.index("blk_per_g") - 35])
             stats["blk_per_g"].append(tr[tr.index("blk_per_g") + 11:tr.index("tov_per_g") - 35])
             stats["tov_per_g"].append(tr[tr.index("tov_per_g") + 11:tr.index("pf_per_g") - 35])
-        while len(stats["bpm"]) < len(stats["pts_per_g"]):
-            stats["ts_pct"].append(
-                response[response.index(" \" data-stat=\"ts") + 23:response.index(" \" data-stat=\"fg3a_per_fga") - 21])
-            stats["ws"].append(
-                response[response.index(" \" data-stat=\"ws\"") + 19:response.index(" \" data-stat=\"ws_per_48") - 21])
-            stats["ws/48"].append(
-                response[response.index(" \" data-stat=\"ws_per_48") + 26:response.index(" \" data-stat=\"bpm-dum") - 21])
-            stats["bpm"].append(
-                response[response.index(" \" data-stat=\"bpm\"") + 20:response.index(" \" data-stat=\"vorp") - 21])
-            position = response.index(" \" data-stat=\"vorp") + 20
-            response = response[position:]
-            new_position = response.index("</tr>")
-            stats["vorp"].append(
-                response[1:new_position - 5])
-            response = response[new_position:]
+        add_comparisons(stats, response, urls[url], advanced_stats)
         combined = []
         for stat in stats:
             for item in stats[stat]:
                 combined.append(item)
-        print(combined)
-        # players[url]["all"] = combined]
+            combined.append("")
+        combined = [float(item) if item != "" and "<" not in item else item for item in combined]
+        if urls[url] in players:
+            players[urls[url]]["all"] = combined
+    for count, advanced_stat in enumerate(advanced_stats):
+        with open("comparisons/" + file_names[count] + "_comparisons.csv", mode='w') as stats_file:
+            comp_writer = csv.writer(stats_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            values = list(advanced_stat.keys())
+            values.sort()
+            for value in values:
+                to_write = [value, advanced_stat[value]]
+                comp_writer.writerow(to_write)
 
-page_scrape(["players/s/smartma01.html"],"")
+
+def add_comparisons(stats, response, name, advanced_stats):
+    while len(stats["bpm"]) < len(stats["pts_per_g"]):
+        ts = response[response.index(" \" data-stat=\"ts") + 23:response.index(" \" data-stat=\"fg3a_per_fga") - 21]
+        ws = response[response.index(" \" data-stat=\"ws\"") + 19:response.index(" \" data-stat=\"ws_per_48") - 21]
+        ws_forty = response[response.index(" \" data-stat=\"ws_per_48") + 26:response.index(" \" data-stat=\"bpm-dum") - 21]
+        bpm = response[response.index(" \" data-stat=\"bpm\"") + 20:response.index(" \" data-stat=\"vorp") - 21]
+        year = response[response.index("advanced.") + 9:response.index("advanced.") + 13]
+        stats["ts_pct"].append(ts)
+        stats["ws"].append(ws)
+        stats["ws/48"].append(ws_forty)
+        stats["bpm"].append(bpm)
+        position = response.index(" \" data-stat=\"vorp") + 20
+        response = response[position:]
+        new_position = response.index("</tr>")
+        vorp = response[1:new_position - 5]
+        stats["vorp"].append(vorp)
+        add_comparison(round(float(ws), 1), advanced_stats[0], year, name)
+        add_comparison(round(float(bpm), 1), advanced_stats[1], year, name)
+        add_comparison(round(float(ws_forty), 2), advanced_stats[2], year, name)
+        add_comparison(round(float(vorp), 1), advanced_stats[3], year, name)
+        response = response[new_position:]
 
 
-#all_stats_scrape("")
+
+def add_comparison(stat, comparison, year, name):
+    if stat in comparison:
+        comparison[stat].append(str(year) + " " + name)
+    else:
+        comparison[stat] = [str(year) + " " + name]
+
+
+# page_scrape({"players/s/smartma01.html": "Marcus Smart"}, "")
+
+
+# all_stats_scrape("")
 
 
 def scrape_stats(starting_year, ending_year):
@@ -221,14 +251,18 @@ def scrape_stats(starting_year, ending_year):
                 players[name[1] + " " + name[0]]["draft_year"] = value
                 draft_position += 1
     advanced_stats_scrape(players)
+    all_stats_scrape(players)
     with open('stats.csv', mode='w') as stats_file:
         stats_writer = csv.writer(stats_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         for player in players:
-            rpm = players[player].pop("rpm")
             players[player].pop("draft_year")
-            to_write = [player] + list(players[player].values()) + rpm
+            rpm = players[player].pop("rpm")
+            combined = []
+            if "all" in players[player]:
+                combined = list(players[player].pop("all"))
+            to_write = [player] + list(players[player].values()) + rpm + combined
             stats_writer.writerow(to_write)
 
 
 
-# scrape_stats(2003, 2018)
+scrape_stats(2004, 2004)
