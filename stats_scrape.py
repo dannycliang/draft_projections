@@ -179,11 +179,21 @@ def page_scrape(urls, players):
         combined = [float(item) if item != "" and "<" not in item else item for item in combined]
         if urls[url] in players:
             players[urls[url]]["all"] = combined
+    """
+    cleaned_advanced_stats = []
+    for advanced_stat in advanced_stats:
+        current = {}
+        for stat in advanced_stat:
+            if type(stat) is str:
+                current[float(stat[stat.index(">") + 1:stat.index("</")])] = advanced_stat[stat]
+            else:
+                current[stat] = advanced_stat[stat]
+        cleaned_advanced_stats.append(current)"""
     for count, advanced_stat in enumerate(advanced_stats):
         with open("comparisons/" + file_names[count] + "_comparisons.csv", mode='w') as stats_file:
             comp_writer = csv.writer(stats_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             values = list(advanced_stat.keys())
-            values.sort()
+            # values.sort()
             for value in values:
                 to_write = [value, advanced_stat[value]]
                 comp_writer.writerow(to_write)
@@ -205,10 +215,30 @@ def add_comparisons(stats, response, name, advanced_stats):
         new_position = response.index("</tr>")
         vorp = response[1:new_position - 5]
         stats["vorp"].append(vorp)
-        add_comparison(round(float(ws), 1), advanced_stats[0], year, name)
-        add_comparison(round(float(bpm), 1), advanced_stats[1], year, name)
-        add_comparison(round(float(ws_forty), 2), advanced_stats[2], year, name)
-        add_comparison(round(float(vorp), 1), advanced_stats[3], year, name)
+        try:
+            ws = round(float(ws), 1)
+        except:
+            print(ws)
+            pass
+        try:
+            bpm = round(float(bpm), 1)
+        except:
+            print(bpm)
+            pass
+        try:
+            ws_forty = round(float(ws_forty), 2)
+        except:
+            print(ws_forty)
+            pass
+        try:
+            vorp = round(float(vorp), 1)
+        except:
+            print(vorp)
+            pass
+        add_comparison(ws, advanced_stats[0], year, name)
+        add_comparison(bpm, advanced_stats[1], year, name)
+        add_comparison(ws_forty, advanced_stats[2], year, name)
+        add_comparison(vorp, advanced_stats[3], year, name)
         response = response[new_position:]
 
 
@@ -247,7 +277,7 @@ def scrape_stats(starting_year, ending_year):
                 name = characteristic[starting_index + 3:ending_index - 2].split(",")
                 players[name[1] + " " + name[0]] = college_stat_scrape(name)
                 players[name[1] + " " + name[0]]["selection"] = draft_position
-                players[name[1] + " " + name[0]]["rpm"] = ["N/A" for _ in range(15)]
+                players[name[1] + " " + name[0]]["rpm"] = ["N/A" for _ in range(21)]
                 players[name[1] + " " + name[0]]["draft_year"] = value
                 draft_position += 1
     advanced_stats_scrape(players)
@@ -265,4 +295,4 @@ def scrape_stats(starting_year, ending_year):
 
 
 
-scrape_stats(2004, 2004)
+scrape_stats(1996, 2018)
